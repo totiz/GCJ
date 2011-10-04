@@ -1,127 +1,103 @@
-public ActionForward showAccTransferTo(ActionMapping mapping, ActionForm form, HttpServletRequest request, HttpServletResponse response) throws Exception {
+public ActionForward showAccEchequeOtherKTB(ActionMapping mapping, ActionForm form, HttpServletRequest request, HttpServletResponse response) throws Exception {
         TransferForm forms = (TransferForm) form;
         String forwardMapping = PAGE_ERROR;
-        DepAcctIdType[] newDepAcctIdType = null;
-        StringBuffer xml = new StringBuffer();
 
         try {
             //Tracking Parameter
-            TrackParameter trackParam = new TrackParameter(request.getSession(), CLASS_NAME + "showAccTransferTo");
+            TrackParameter trackParam = new TrackParameter(request.getSession(), CLASS_NAME + "showAccEchequeOtherKTB");
             trackParam.commonTrack();
 
-            if (request.getSession(false).getAttribute(PortalConstants.TRANSER_TO) == null) {
+            //clearSession(request);
+            ArrayList toAcc = new ArrayList();
+            StringBuffer xml = new StringBuffer();
+            DecimalFormat df = new DecimalFormat("00");
+            ResourceBundle bundle = ResourceBundle.getBundle("FundTransferMessages", (Locale) request.getSession(false).getAttribute("org.apache.struts.action.LOCALE"));
 
-                if (forms.getFundTransferOwnAccController().getToAccVal() == null) {
-                    FundTransferOwnAccController controller = forms.getFundTransferOwnAccController();
-                    controller.setControllerRequest(request);
-                    ActionForward forward1 = controller.begin();
-                    if (forward1.getPath().equals("Exception")) {
+            if (request.getSession(false).getAttribute("echeque_3rdAccount") == null) {
+                eChequeIssueController controller = forms.getEchequeIssueController();
+                controller.setControllerRequest(request);
+                ActionForward forward = controller.begin();
+                ActionForward forward2 = null;
+                if (forward.getPath().equals("success")) {
+                    forward2 = controller.accountInq(null);
+                    if (!forward2.getPath().equals("success")) {
+                        response.setContentType("text/xml;charset=UTF-8");
+                        response.setHeader("Cache-Control", "no-cache");
+                        response.setDateHeader("Expires", -1);
+
+                        xml.append("<DATAS>");
+                        xml.append("</DATAS>");
+                        request.setAttribute("xml", xml.toString());
+                        forwardMapping = PAGE_GEN_XML;
                         return mapping.findForward(forwardMapping);
                     }
-                    ActionForward forward2 = controller.acctInq(null);
-                    if (forward2.getPath().equals("Exception")) {
-                        return mapping.findForward(forwardMapping);
-                    }
+
+                } else if (!forward.getPath().equals("success")) {
+                    response.setContentType("text/xml;charset=UTF-8");
+                    response.setHeader("Cache-Control", "no-cache");
+                    response.setDateHeader("Expires", -1);
+
+                    xml.append("<DATAS>");
+                    xml.append("</DATAS>");
+                    request.setAttribute("xml", xml.toString());
+                    forwardMapping = PAGE_GEN_XML;
+                    return mapping.findForward(forwardMapping);
                 }
-
-                Map accTo = forms.getFundTransferOwnAccController().getToAccVal();
-                if (accTo == null) {
-                    accTo = new HashMap();
-                }
-
-                DepAcctIdType[] depAcctIdType = (DepAcctIdType[]) request.getSession(true).getAttribute(PortalConstants.ACCOUNTS_TR_TO);
-                if (depAcctIdType == null) {
-                    depAcctIdType = new DepAcctIdType[0];
-                }
-                newDepAcctIdType = new DepAcctIdType[accTo.size()];
-
-                int run = 0;
-                for (int i = 0; i < depAcctIdType.length; i++) {
-                    if (depAcctIdType[i] != null) {
-                        if (accTo.get(depAcctIdType[i].getAcctId()) != null) {
-                            newDepAcctIdType[run] = depAcctIdType[i];
-                            run++;
-                        }
-                    }
-
-                }
-
-                request.getSession(true).setAttribute(PortalConstants.TRANSER_TO, newDepAcctIdType);
-            } else { // != null
-                newDepAcctIdType = (DepAcctIdType[]) request.getSession(true).getAttribute(PortalConstants.TRANSER_TO);
             }
 
-            if (newDepAcctIdType != null && newDepAcctIdType.length > 0) {
-
+            toAcc = (ArrayList) request.getSession(false).getAttribute("echeque_3rdAccount");
+            if (toAcc != null) {
                 response.setContentType("text/xml;charset=UTF-8");
                 response.setHeader("Cache-Control", "no-cache");
                 response.setDateHeader("Expires", -1);
 
-                xml.append("<DATAS id=\"root\">");
+                xml.append("<DATAS>");
+                int count = 0;
+                String accNo = "";
+                String alias = "";
+                String bankName = "";
+                String acctType = "";
+                String acctName = "";
+                String mobilePayee = "";
+                for (int i = 0; i < toAcc.size(); i++) {
+                    accNo = "";
+                    alias = "";
+                    bankName = "";
+                    acctType = "";
+                    acctName = "";
+                    mobilePayee = "";
 
-                SimpleDateFormat sdf = new SimpleDateFormat(ResourceManager.getString(PortalConstants.DATE_FORMAT));
-                String language = request.getSession(false).getAttribute("org.apache.struts.action.LOCALE") != null ? ((Locale) request.getSession(false).getAttribute("org.apache.struts.action.LOCALE")).getLanguage() : "en";
-                Locale locale = new Locale(language);
-                ResourceBundle bundle = ResourceBundle.getBundle("AccountManagementMessages", locale);
+                    CustPayeeRecType custPayeeRecType = (CustPayeeRecType) toAcc.get(i);
 
-                String paramValue;
-                String bankId;
+                    accNo = AccountFormatter.formatAccountNumberWithBank(custPayeeRecType.getXferPayee().getDepAcctIdTo());
+                    bankName = "";
 
-                for (int i = 0; i < newDepAcctIdType.length; i++) {
-
-                    if (newDepAcctIdType[i] == null || newDepAcctIdType[i].getBankInfo() == null) {
-                        continue;
+                    try {
+                        acctType = bundle.getString(custPayeeRecType.getXferPayee().getDepAcctIdTo().getProdGrp());
+                    } catch (Exception ex) {
                     }
 
-                    String ldgrBalance = "0.00";
-                    String availBalance = "0.00";
-                    String type = newDepAcctIdType[i].getProdGrp();
-                    paramValue = new Integer(i).toString();
-                    bankId = (newDepAcctIdType[i].getBankInfo()).getBankId();
+                    acctName = (custPayeeRecType.getXferPayee().getDepAcctIdTo().isSetAcctName()) ? custPayeeRecType.getXferPayee().getDepAcctIdTo().getAcctName() : "";
+                    alias = (custPayeeRecType.getXferPayee().isSetAlias()) ? custPayeeRecType.getXferPayee().getAlias() : "";
+                    alias = alias.equals("") ? acctName : alias;
 
-                    String trxDate = newDepAcctIdType[i].getLastTransactionDate() == null ? "" : sdf.format(newDepAcctIdType[i].getLastTransactionDate().getTime());
-                    String currCode = newDepAcctIdType[i].isSetCurrCode() ? newDepAcctIdType[i].getCurrCode() : "";
-                    String acctAlias = newDepAcctIdType[i].isSetAcctAlias() ? newDepAcctIdType[i].getAcctAlias() : "";
-                    String odLimit = newDepAcctIdType[i].isSetODLimit() ? CurrencyFormatter.getFormattedValue(newDepAcctIdType[i].getODLimit().toString()) : "";
-                    odLimit = odLimit == null || odLimit.equals("") ? "N/A" : odLimit;
-                    String acctStatus = newDepAcctIdType[i].getAcctStatus() != null ? newDepAcctIdType[i].getAcctStatus().getAcctStatusCode() : "";
-                    String acctName = (newDepAcctIdType[i].isSetAcctName()) ? newDepAcctIdType[i].getAcctName() : "";
-                    AcctBalType acctBalArray[] = newDepAcctIdType[i].getAcctBalArray();
-                    if (acctBalArray != null) {
-                        for (int j = 0; j < acctBalArray.length; j++) {
+                    xml.append("        <DATA>");
+                    xml.append("		<INDEX>" + count + "</INDEX>");
+                    xml.append("		<INDEX-DELETE>" + i + "</INDEX-DELETE>");
+                    xml.append("		<OID>E_OTHERKTB" + df.format(i) + "</OID>");
+                    xml.append("		<ALIAS>" + ValidateFormUtil.replaceSpecailCharacterXML(alias) + "</ALIAS>");
+                    xml.append("		<TYPE>" + acctType + "</TYPE>");
+                    xml.append("		<TYPEID>" + custPayeeRecType.getXferPayee().getDepAcctIdTo().getProdGrp() + "</TYPEID>");
+                    xml.append("        <ACCID>" + custPayeeRecType.getXferPayee().getDepAcctIdTo().getAcctId() + "</ACCID>");
+                    xml.append("		<ACCOUNTNO>" + ValidateFormUtil.replaceSpecailCharacterXML(accNo) + "</ACCOUNTNO>");
+                    xml.append("		<ACCOUNTNOTEMP>" + ValidateFormUtil.replaceSpecailCharacterXML(custPayeeRecType.getXferPayee().getDepAcctIdTo().getAcctId()) + "</ACCOUNTNOTEMP>");
+                    xml.append("		<ACCOUNTNAME>" + ValidateFormUtil.replaceSpecailCharacterXML(acctName) + "</ACCOUNTNAME>");
+                    xml.append("		<TELNO>" + mobilePayee + "</TELNO>");
+                    xml.append("		<LOGO></LOGO>");
+                    xml.append("		<BANK>" + ValidateFormUtil.replaceSpecailCharacterXML(bankName) + "</BANK>");
+                    xml.append("	</DATA>");
 
-                            if (acctBalArray[j].getBalType().equals(PortalConstants.LDGR)) {
-                                ldgrBalance = acctBalArray[j].getCurAmt() != null ? acctBalArray[j].getCurAmt().toString() : "0.00";
-                            } else if (acctBalArray[j].getBalType().equals(PortalConstants.AVAIL)) {
-                                availBalance = acctBalArray[j].getCurAmt() != null ? acctBalArray[j].getCurAmt().toString() : "0.00";
-                            }
-                        }
-                    }
-
-                    String prodGrp = bundle.getString(newDepAcctIdType[i].getProdGrp()) != null ? bundle.getString(newDepAcctIdType[i].getProdGrp()) : "";
-                    DecimalFormat df = new DecimalFormat("00");
-                    String running = df.format(i);
-
-                    xml.append("  <DATA>");
-                    xml.append("    <OID>OWNER" + running + "</OID>");
-                    xml.append("    <ACCOUNTNO>" + ValidateFormUtil.replaceSpecailCharacterXML(String.valueOf(AccountFormatter.formatAccountNumberWithBank(newDepAcctIdType[i]))) + "</ACCOUNTNO>");
-                    xml.append("    <ALIAS>" + ValidateFormUtil.replaceSpecailCharacterXML((!(acctAlias.equals("")) ? acctAlias : acctName)) + "</ALIAS>");
-                    xml.append("    <TYPE>" + newDepAcctIdType[i].getProdGrp() + "</TYPE>");//prodGrp
-                    xml.append("    <TYPEID>1</TYPEID>");       // Case : Saving Type
-                    xml.append("    <INDEX>" + i + "</INDEX>");
-                    xml.append("    <ACCID>" + newDepAcctIdType[i].getAcctId() + "</ACCID>");
-                    //if(acctStatus.equals(PortalConstants.ACCT_STAT_UNCLAIMED) || acctStatus.equals(PortalConstants.ACCT_STAT_MISCLNIOS)) {
-                    if (acctStatus.equals(PortalConstants.ACCT_STAT_MISCLNIOS)) {
-                        xml.append("    <AMOUNT>N/A</AMOUNT>");
-                        xml.append("    <WITHDRAWABLE>N/A</WITHDRAWABLE>");
-                        xml.append("    <OVERACCOUNT>N/A</OVERACCOUNT>");
-                    } else {
-                        xml.append("    <AMOUNT>" + CurrencyFormatter.getFormattedValue(ldgrBalance) + "</AMOUNT>");
-                        xml.append("    <WITHDRAWABLE>" + CurrencyFormatter.getFormattedValue(availBalance) + "</WITHDRAWABLE>");
-                        xml.append("    <OVERACCOUNT>" + odLimit + "</OVERACCOUNT>");
-                    }
-                    xml.append("    <LASTTRANSACTION>" + trxDate + "</LASTTRANSACTION>");
-                    xml.append("  </DATA>");
+                    count++;
                 }
 
                 xml.append("</DATAS>");
@@ -131,10 +107,9 @@ public ActionForward showAccTransferTo(ActionMapping mapping, ActionForm form, H
                 response.setHeader("Cache-Control", "no-cache");
                 response.setDateHeader("Expires", -1);
 
-                xml.append("<DATAS id=\"root\">");
+                xml.append("<DATAS>");
                 xml.append("</DATAS>");
             }
-
             request.setAttribute("xml", xml.toString());
             forwardMapping = PAGE_GEN_XML;
 
