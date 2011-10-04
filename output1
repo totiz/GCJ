@@ -1,40 +1,146 @@
-Case #1: NO
-Case #2: 10
-Case #3: 2310
-Case #4: 8633
-Case #5: NO
-Case #6: NO
-Case #7: NO
-Case #8: NO
-Case #9: NO
-Case #10: NO
-Case #11: NO
-Case #12: NO
-Case #13: NO
-Case #14: NO
-Case #15: NO
-Case #16: 2310
-Case #17: NO
-Case #18: NO
-Case #19: NO
-Case #20: NO
-Case #21: NO
-Case #22: 714
-Case #23: NO
-Case #24: NO
-Case #25: NO
-Case #26: NO
-Case #27: 210
-Case #28: NO
-Case #29: NO
-Case #30: NO
-Case #31: NO
-Case #32: NO
-Case #33: NO
-Case #34: NO
-Case #35: NO
-Case #36: NO
-Case #37: NO
-Case #38: NO
-Case #39: NO
-Case #40: 15
+public ActionForward showAccTransferTo(ActionMapping mapping, ActionForm form, HttpServletRequest request, HttpServletResponse response) throws Exception {
+        TransferForm forms = (TransferForm) form;
+        String forwardMapping = PAGE_ERROR;
+        DepAcctIdType[] newDepAcctIdType = null;
+        StringBuffer xml = new StringBuffer();
+
+        try {
+            //Tracking Parameter
+            TrackParameter trackParam = new TrackParameter(request.getSession(), CLASS_NAME + "showAccTransferTo");
+            trackParam.commonTrack();
+
+            if (request.getSession(false).getAttribute(PortalConstants.TRANSER_TO) == null) {
+
+                if (forms.getFundTransferOwnAccController().getToAccVal() == null) {
+                    FundTransferOwnAccController controller = forms.getFundTransferOwnAccController();
+                    controller.setControllerRequest(request);
+                    ActionForward forward1 = controller.begin();
+                    if (forward1.getPath().equals("Exception")) {
+                        return mapping.findForward(forwardMapping);
+                    }
+                    ActionForward forward2 = controller.acctInq(null);
+                    if (forward2.getPath().equals("Exception")) {
+                        return mapping.findForward(forwardMapping);
+                    }
+                }
+
+                Map accTo = forms.getFundTransferOwnAccController().getToAccVal();
+                if (accTo == null) {
+                    accTo = new HashMap();
+                }
+
+                DepAcctIdType[] depAcctIdType = (DepAcctIdType[]) request.getSession(true).getAttribute(PortalConstants.ACCOUNTS_TR_TO);
+                if (depAcctIdType == null) {
+                    depAcctIdType = new DepAcctIdType[0];
+                }
+                newDepAcctIdType = new DepAcctIdType[accTo.size()];
+
+                int run = 0;
+                for (int i = 0; i < depAcctIdType.length; i++) {
+                    if (depAcctIdType[i] != null) {
+                        if (accTo.get(depAcctIdType[i].getAcctId()) != null) {
+                            newDepAcctIdType[run] = depAcctIdType[i];
+                            run++;
+                        }
+                    }
+
+                }
+
+                request.getSession(true).setAttribute(PortalConstants.TRANSER_TO, newDepAcctIdType);
+            } else { // != null
+                newDepAcctIdType = (DepAcctIdType[]) request.getSession(true).getAttribute(PortalConstants.TRANSER_TO);
+            }
+
+            if (newDepAcctIdType != null && newDepAcctIdType.length > 0) {
+
+                response.setContentType("text/xml;charset=UTF-8");
+                response.setHeader("Cache-Control", "no-cache");
+                response.setDateHeader("Expires", -1);
+
+                xml.append("<DATAS id=\"root\">");
+
+                SimpleDateFormat sdf = new SimpleDateFormat(ResourceManager.getString(PortalConstants.DATE_FORMAT));
+                String language = request.getSession(false).getAttribute("org.apache.struts.action.LOCALE") != null ? ((Locale) request.getSession(false).getAttribute("org.apache.struts.action.LOCALE")).getLanguage() : "en";
+                Locale locale = new Locale(language);
+                ResourceBundle bundle = ResourceBundle.getBundle("AccountManagementMessages", locale);
+
+                String paramValue;
+                String bankId;
+
+                for (int i = 0; i < newDepAcctIdType.length; i++) {
+
+                    if (newDepAcctIdType[i] == null || newDepAcctIdType[i].getBankInfo() == null) {
+                        continue;
+                    }
+
+                    String ldgrBalance = "0.00";
+                    String availBalance = "0.00";
+                    String type = newDepAcctIdType[i].getProdGrp();
+                    paramValue = new Integer(i).toString();
+                    bankId = (newDepAcctIdType[i].getBankInfo()).getBankId();
+
+                    String trxDate = newDepAcctIdType[i].getLastTransactionDate() == null ? "" : sdf.format(newDepAcctIdType[i].getLastTransactionDate().getTime());
+                    String currCode = newDepAcctIdType[i].isSetCurrCode() ? newDepAcctIdType[i].getCurrCode() : "";
+                    String acctAlias = newDepAcctIdType[i].isSetAcctAlias() ? newDepAcctIdType[i].getAcctAlias() : "";
+                    String odLimit = newDepAcctIdType[i].isSetODLimit() ? CurrencyFormatter.getFormattedValue(newDepAcctIdType[i].getODLimit().toString()) : "";
+                    odLimit = odLimit == null || odLimit.equals("") ? "N/A" : odLimit;
+                    String acctStatus = newDepAcctIdType[i].getAcctStatus() != null ? newDepAcctIdType[i].getAcctStatus().getAcctStatusCode() : "";
+                    String acctName = (newDepAcctIdType[i].isSetAcctName()) ? newDepAcctIdType[i].getAcctName() : "";
+                    AcctBalType acctBalArray[] = newDepAcctIdType[i].getAcctBalArray();
+                    if (acctBalArray != null) {
+                        for (int j = 0; j < acctBalArray.length; j++) {
+
+                            if (acctBalArray[j].getBalType().equals(PortalConstants.LDGR)) {
+                                ldgrBalance = acctBalArray[j].getCurAmt() != null ? acctBalArray[j].getCurAmt().toString() : "0.00";
+                            } else if (acctBalArray[j].getBalType().equals(PortalConstants.AVAIL)) {
+                                availBalance = acctBalArray[j].getCurAmt() != null ? acctBalArray[j].getCurAmt().toString() : "0.00";
+                            }
+                        }
+                    }
+
+                    String prodGrp = bundle.getString(newDepAcctIdType[i].getProdGrp()) != null ? bundle.getString(newDepAcctIdType[i].getProdGrp()) : "";
+                    DecimalFormat df = new DecimalFormat("00");
+                    String running = df.format(i);
+
+                    xml.append("  <DATA>");
+                    xml.append("    <OID>OWNER" + running + "</OID>");
+                    xml.append("    <ACCOUNTNO>" + ValidateFormUtil.replaceSpecailCharacterXML(String.valueOf(AccountFormatter.formatAccountNumberWithBank(newDepAcctIdType[i]))) + "</ACCOUNTNO>");
+                    xml.append("    <ALIAS>" + ValidateFormUtil.replaceSpecailCharacterXML((!(acctAlias.equals("")) ? acctAlias : acctName)) + "</ALIAS>");
+                    xml.append("    <TYPE>" + newDepAcctIdType[i].getProdGrp() + "</TYPE>");//prodGrp
+                    xml.append("    <TYPEID>1</TYPEID>");       // Case : Saving Type
+                    xml.append("    <INDEX>" + i + "</INDEX>");
+                    xml.append("    <ACCID>" + newDepAcctIdType[i].getAcctId() + "</ACCID>");
+                    //if(acctStatus.equals(PortalConstants.ACCT_STAT_UNCLAIMED) || acctStatus.equals(PortalConstants.ACCT_STAT_MISCLNIOS)) {
+                    if (acctStatus.equals(PortalConstants.ACCT_STAT_MISCLNIOS)) {
+                        xml.append("    <AMOUNT>N/A</AMOUNT>");
+                        xml.append("    <WITHDRAWABLE>N/A</WITHDRAWABLE>");
+                        xml.append("    <OVERACCOUNT>N/A</OVERACCOUNT>");
+                    } else {
+                        xml.append("    <AMOUNT>" + CurrencyFormatter.getFormattedValue(ldgrBalance) + "</AMOUNT>");
+                        xml.append("    <WITHDRAWABLE>" + CurrencyFormatter.getFormattedValue(availBalance) + "</WITHDRAWABLE>");
+                        xml.append("    <OVERACCOUNT>" + odLimit + "</OVERACCOUNT>");
+                    }
+                    xml.append("    <LASTTRANSACTION>" + trxDate + "</LASTTRANSACTION>");
+                    xml.append("  </DATA>");
+                }
+
+                xml.append("</DATAS>");
+
+            } else {
+                response.setContentType("text/xml;charset=UTF-8");
+                response.setHeader("Cache-Control", "no-cache");
+                response.setDateHeader("Expires", -1);
+
+                xml.append("<DATAS id=\"root\">");
+                xml.append("</DATAS>");
+            }
+
+            request.setAttribute("xml", xml.toString());
+            forwardMapping = PAGE_GEN_XML;
+
+        } catch (Exception e) {
+            LogUtil.getLogger(LogConstants.INFRA).error("Exception!", e);
+        }
+
+        return mapping.findForward(forwardMapping);
+    }
